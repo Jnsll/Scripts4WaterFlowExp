@@ -21,12 +21,14 @@ def modifyValuesInLinesToRemain(indexes, nbTotal):
                 dfbis.iat[indexes[i],4] += dfbis['rech'][z]
                 dfbis.iat[indexes[i],5] += dfbis['chd_sea'][z]
             dfbis.iat[indexes[i],5] = dfbis.iat[indexes[i],5]/(indexes[i+1]-indexes[i])
+            dfbis.iat[indexes[i],4] = dfbis.iat[indexes[i],4]/(indexes[i+1]-indexes[i])
             dfbis.iat[indexes[i], 1] = indexes[i+1]-indexes[i]
         else:
             for z in range(indexes[i], nbTotal):
                 dfbis.iat[indexes[i],4] += dfbis['rech'][z]
                 dfbis.iat[indexes[i],5] += dfbis['chd_sea'][z]
             dfbis.iat[indexes[i],5] = dfbis.iat[indexes[i],5]/(nbTotal-indexes[i])
+            dfbis.iat[indexes[i],4] = dfbis.iat[indexes[i],4]/(nbTotal-indexes[i])
             dfbis.iat[indexes[i],1] = nbTotal-indexes[i]
     return dfbis
           
@@ -51,5 +53,5 @@ def removeLinesExceptThoseWithFollowingIndexes(dfbis, indexes):
 if __name__ == '__main__':
     dfbis = modifyValuesInLinesToRemain(indexes, nbTotal)
     dfbiss = removeLinesExceptThoseWithFollowingIndexes(dfbis, indexes)
-    outputname = "input_file_model_test_withoutFirst_semestre_comb.txt"
+    outputname = "input_file_model_test_withoutFirst_semestre_comb_rechmean.txt"
     dfbiss.to_csv(repo + outputname, sep="\t", index=False)
