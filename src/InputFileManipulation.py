@@ -3,31 +3,47 @@ import pandas as pd
 import argparse
 
 def extractDfFromRefInputFile(inputName):
-    inputRepo = "resources"
-    inputPath = os.path.join(
-        '/'.join(os.getcwd().split('/')[:-1]), inputRepo, inputName)
+    inputRepo = "data"
+    inputPath = os.path.join('/'.join(os.getcwd().split('/')), inputRepo, inputName)
     df = pd.read_csv(inputPath, sep='\t')
     return df
 
 def getNumberOfLinesToReduceInLoop(prd):
     if (prd == "semester"):
-        period = [183, 182]
+        period = [182, 183, 182, 183, 183, 183, 183, 182]
+    elif (prd== "trimester"):
+        period = [91, 91, 91, 92, 91, 91, 91, 92, 92, 91, 91, 92, 91, 91, 91, 92]
     elif (prd == "monthly"):
-        period = [30]
+        period = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+        period.extend([31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31])
+        period.extend([31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31])
+        period.extend([31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31])
     elif (prd == "weekly"):
-        period = [7]
+        period = [7] * 52
+        period.append(1)
+        period.extend([7] * 52)
+        period.append(1)
+        period.extend([7]*52)
+        period.append(2)
+        period.extend([7] * 52)
+        period.append(1)
     elif (prd == "daily"):
         period = [1]
     elif (prd == "init"):
         period = [1]
+    elif (prd == "year"):
+        period = [365, 365, 366, 365]
+    elif (prd == "twoyear"):
+        period = [730, 731]
+    elif (prd == "tenyear"):
+        period = [3652, 3653]
     return period
 
 # nbTotalLines = len(df.index)
 
-
 def getIndexesToRemain(nbTotalLines, period):
-    ligne = 0
-    indexes = [0]
+    ligne = 1
+    indexes = [0, 1]
     taille_period = len(period)
     i = 0
     while (ligne < nbTotalLines-1):
@@ -42,21 +58,16 @@ def getIndexesToRemain(nbTotalLines, period):
 
 
 def modifyValuesInLinesToRemain(df, indexes, nbTotal):
-    for i in range(len(indexes)):
+    for i in range(1, len(indexes)):
         if i < (len(indexes)-1):
-            for z in range(indexes[i], indexes[i+1]):
+            for z in range(indexes[i]+1, indexes[i+1]): #+1 pour ne pas compter la valeur df.iat[indexes[i]] une deuxième fois
                 df.iat[indexes[i], 4] += df['rech'][z]
-                #df.iat[indexes[i], 5] += df['chd_sea'][z]
-            #df.iat[indexes[i], 5] = df.iat[indexes[i], 5] / \
-             #   (indexes[i+1]-indexes[i])
             df.iat[indexes[i], 4] = df.iat[indexes[i], 4] / \
                 (indexes[i+1]-indexes[i])
             df.iat[indexes[i], 1] = indexes[i+1]-indexes[i]
         else:
-            for z in range(indexes[i], nbTotal):
+            for z in range(indexes[i]+1, nbTotal):
                 df.iat[indexes[i], 4] += df['rech'][z]
-                #df.iat[indexes[i], 5] += df['chd_sea'][z]
-            #df.iat[indexes[i], 5] = df.iat[indexes[i], 5]/(nbTotal-indexes[i])
             df.iat[indexes[i], 4] = df.iat[indexes[i], 4]/(nbTotal-indexes[i])
             df.iat[indexes[i], 1] = nbTotal-indexes[i]
     return df
@@ -64,19 +75,14 @@ def modifyValuesInLinesToRemain(df, indexes, nbTotal):
 def modifyValuesInLinesToRemainWithSeaLvl(df, indexes, nbTotal):
     for i in range(len(indexes)):
         if i < (len(indexes)-1):
-            for z in range(indexes[i], indexes[i+1]):
+            for z in range(indexes[i]+1, indexes[i+1]):
                 df.iat[indexes[i], 4] += df['rech'][z]
-                df.iat[indexes[i], 5] += df['chd_sea'][z]
-            df.iat[indexes[i], 5] = df.iat[indexes[i], 5] / \
-                (indexes[i+1]-indexes[i])
             df.iat[indexes[i], 4] = df.iat[indexes[i], 4] / \
                 (indexes[i+1]-indexes[i])
             df.iat[indexes[i], 1] = indexes[i+1]-indexes[i]
         else:
-            for z in range(indexes[i], nbTotal):
+            for z in range(indexes[i]+1, nbTotal):
                 df.iat[indexes[i], 4] += df['rech'][z]
-                df.iat[indexes[i], 5] += df['chd_sea'][z]
-            df.iat[indexes[i], 5] = df.iat[indexes[i], 5]/(nbTotal-indexes[i])
             df.iat[indexes[i], 4] = df.iat[indexes[i], 4]/(nbTotal-indexes[i])
             df.iat[indexes[i], 1] = nbTotal-indexes[i]
     return df
@@ -105,18 +111,13 @@ def changePeriodValue(df, periodValue):
     return df
 
 
-def addVariationToSeaLevel(df, seaLvlVariationValue):
-    df["chd_sea"] += seaLvlVariationValue
-    return df
-
 def writeInputFile(modelname, df):
     outputname = "input_file_" + modelname + ".txt"
-    filepath = os.path.join('/'.join(os.getcwd().split('/')[:-1]), "resources", outputname)
+    filepath = os.path.join('/'.join(os.getcwd().split('/')), "data", outputname)
     df.to_csv(filepath, sep="\t", index=False)
-    print(filepath)
-    return filepath
+    return outputname
 
-def manipulateInputFile(inputName, prd, timestepValue, periodValue, seaValue):
+def manipulateInputFile(inputName, prd, timestepValue): #, periodValue
     df = extractDfFromRefInputFile(inputName)
     if (prd != "init") and (prd is not None):
         period = getNumberOfLinesToReduceInLoop(prd)
@@ -125,16 +126,16 @@ def manipulateInputFile(inputName, prd, timestepValue, periodValue, seaValue):
         df = removeLinesExceptThoseWithFollowingIndexes(df, indexes)
     if timestepValue is not None:
         df = changeTimestepValue(df, timestepValue)
-    if periodValue is not None:
-        df = changePeriodValue(df, periodValue)
-    if seaValue is not None:
-        df = addVariationToSeaLevel(df, seaValue)
+    # if periodValue is not None:
+    #     df = changePeriodValue(df, periodValue)
+    # if seaValue is not None:
+    #     df = addVariationToSeaLevel(df, seaValue)
     return df
 
-def writeInputFileAfterManipulation(modelname, inputName, prd, timestepValue, periodValue, seaValue):
-    df = manipulateInputFile(inputName, prd, timestepValue, periodValue, seaValue)
-    filepath = writeInputFile(modelname, df)
-    return filepath
+def writeInputFileAfterManipulation(modelname, prd, timestepValue, inputName="input_file.txt"):
+    df = manipulateInputFile(inputName, prd, timestepValue) #, periodValue
+    outputname = writeInputFile(modelname, df)
+    return outputname
 
 if __name__ == '__main__':
     # if len(sys.argv) == 1:
@@ -154,11 +155,9 @@ if __name__ == '__main__':
     parser.add_argument(
         "-p", "--period", help="daily, weekly, monthly, semester or init", type=str, required=False)
     parser.add_argument("-ts", "--timestep", type=int, required=False)
-    parser.add_argument("-sp", "--splength", type=int, required=False)
-    parser.add_argument("-sea", "--sealvlchange", type=int, required=False)
+    #parser.add_argument("-sp", "--splength", type=int, required=False)
     parser.add_argument("-m", "--modelname", type=str, required=True)
-    parser.add_argument(
-        "-i", "--inputfile", help="Name of the input file to take as reference", type=str, required=False)
+    parser.add_argument("-i", "--inputfile", help="Name of the input file to take as reference", type=str, required=False)
     args = parser.parse_args()
 
     # Parameters
@@ -167,9 +166,8 @@ if __name__ == '__main__':
     else:
         inputName = args.inputfile
     timestepValue = args.timestep
-    periodValue = args.splength
+    #periodValue = args.splength
     modelname = args.modelname
     prd = args.period
-    seaValue = args.sealvlchange
 
-    writeInputFileAfterManipulation(modelname, inputName, prd, timestepValue, periodValue, seaValue)
+    writeInputFileAfterManipulation(modelname, prd, timestepValue, inputName)
