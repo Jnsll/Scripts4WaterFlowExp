@@ -35,7 +35,9 @@ def insertFloodZoneValuesForEachPeriodIntoVtuFiles(repo, modelname, averageSeaLe
     data_list = fin.readlines()
     fin.close()
 
-    del data_list[4:3522]
+    index = [x for x in range(len(data_list)) if '</celldata>' in data_list[x].lower()]
+
+    del data_list[4:index[0]]
 
     fout = open("VTU_WaterTable_" + modelname + "_FloodDuration_" + str(upperLimitForFloodZone) + ".vtu", "w")
     fout.writelines(data_list)
