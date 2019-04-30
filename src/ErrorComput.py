@@ -11,6 +11,9 @@ import flopy.utils.binaryfile as fpu
 import math
 import csv
 import pandas as pd
+import threading
+import subprocess
+import math
 
 
 mainAppRepo = os.getcwd() + "/"
@@ -21,18 +24,37 @@ def getPathToSimulationDirectoryFromModelname(modelname, site_name):
 
 def getSiteNameFromSiteNumber(site_number):
     sites = pd.read_csv(mainAppRepo + "data/study_sites.txt", sep='\s+', header=0, index_col=0)
-    site_number = 2
+    #site_number = 2
     site_name = sites.index._data[site_number] + '/'
     return site_name
 
+        
+def getNonDryCellHdsValue(hds, nrow, ncol, nlayer):
+    layer = 0
+    h = hds[layer][nrow][ncol]
+    while (math.isclose(abs(h)/1e+30, 1, rel_tol=1e-3)) and layer<nlayer:
+        if layer == nlayer-1:
+            print("cell completely dry")
+        else:
+            h = hds[layer+1][nrow][ncol]
+            layer+=1
+    return h
 
-def computeErrorRatesFromModelnames(ref, modelname, site_number, timestep=1):
+def addValueToErrorIndicators(s, r, mae, mre, rmse):
+    diff = (s - r)
+    mae += abs(diff)
+    mre += abs(diff / max(1, (s + r)/2))
+    rmse += diff**2
+    return mae, mre, rmse
+
+
+
+def computeErrorRatesFromModelnamesByInterpoliationOptiParalFixedInit(ref, modelname, site_number, startTime, endTime, timestep=1):
     site_name = getSiteNameFromSiteNumber(site_number)
-
-    #repoRef = "/DATA/These/Publi/eScience19/Expes/model_ref/Agon-Coutainville/model_time_0_geo_0_thick_1_K_86.4_Sy_0.1/"
     repoRef = getPathToSimulationDirectoryFromModelname(ref, site_name) 
-    #repoSimu = "/DATA/These/Projects/Model/docker/app/Agon-Coutainville/model_time_0_geo_0_thick_1_K_86.4_Sy_0.1_Periodsemester_Step1"
-    repoSimu = getPathToSimulationDirectoryFromModelname(modelname, site_name) 
+    print(repoRef)
+    repoSimu = getPathToSimulationDirectoryFromModelname(modelname, site_name)
+
 
     refHds = fpu.HeadFile(repoRef + '/' + ref + '.hds')
     refTimes = refHds.get_times()
@@ -40,43 +62,58 @@ def computeErrorRatesFromModelnames(ref, modelname, site_number, timestep=1):
     simuHds = fpu.HeadFile(repoSimu + '/' + modelname + '.hds')
     simuTimes = simuHds.get_times()
     simuKstpkper = simuHds.get_kstpkper()
+    
 
-    for numPrd in range(0, len(simuTimes)): #On prend l'initialisation
-        if (numPrd == 0):
-            refHead = refHds.get_data(kstpkper=(0, simuTimes[numPrd]-1))
-        else:
-            refHead = refHds.get_data(kstpkper=(timestep-1, simuTimes[numPrd]-1))
-        simuHead = simuHds.get_data(kstpkper=simuKstpkper[numPrd])
+    #Pour chaque jour
+    for day in range(startTime, endTime+1):
+        print(day)
+
+        # On récupère la matrice de simulation ref
+        refHead = refHds.get_data(kstpkper=(0, day))
+
+        nbPeriod = 0
+        while (simuTimes[nbPeriod] < day+1) and (nbPeriod < len(simuTimes)):
+            nbPeriod+=1
+        print("nbPeriod : " + str(nbPeriod))
+        #On récupère la matrice de simulation alt supérieure
+
+        print(simuTimes[nbPeriod], day+1)
+        if math.isclose(simuTimes[nbPeriod], day+1, rel_tol=1e-3): #simuTimes[nbPeriod] == day+1
+            print("condition ==")
+            altHeadSup = simuHds.get_data(kstpkper=(timestep-1, nbPeriod))       
+            altHeadInf = altHeadSup
+            duree = int(simuTimes[nbPeriod])
+            pas = day
+        else :
+            altHeadSup = simuHds.get_data(kstpkper=(timestep-1, nbPeriod))        
+            altHeadInf = simuHds.get_data(kstpkper=(timestep-1, nbPeriod-1))
+            duree = int(simuTimes[nbPeriod] - simuTimes[nbPeriod-1])
+            pas = day - simuTimes[nbPeriod-1]
+        
 
         mae = 0
         mre = 0
         rmse = 0
 
-        for nrow in range(simuHead.shape[1]):
-            for ncol in range(simuHead.shape[2]):
-                layerS = 0
-                layerR = 0
-                s = simuHead[0][nrow][ncol]
-                r = refHead[0][nrow][ncol]
-                while (math.isclose(abs(s)/1e+30, 1, rel_tol=1e-3)):
-                    s = simuHead[layerS-1][nrow][ncol]
-                    layerS-=1
-                while (math.isclose(abs(r)/1e+30, 1, rel_tol=1e-3)):
-                    r = refHead[layerR-1][nrow][ncol]
-                    layerR-=1
-                diff = s - r
-                mae += abs(diff)
-                mre += abs(diff / max(1, (simuHead[0][nrow][ncol] - refHead[0][nrow][ncol])/2))
-                rmse += diff**2
+        for nrow in range(refHead.shape[1]):
+            for ncol in range(refHead.shape[2]):
+                ss = getNonDryCellHdsValue(altHeadInf, nrow, ncol, refHead.shape[0])
+                se = getNonDryCellHdsValue(altHeadSup, nrow, ncol, refHead.shape[0])
+                ajoutSimu = (se - ss) / duree
+                
+                r= getNonDryCellHdsValue(refHead, nrow, ncol,refHead.shape[0])
+
+                s = ss + (ajoutSimu * pas)
+
+                mae, mre, rmse = addValueToErrorIndicators(s, r, mae, mre, rmse)
+                
         
-        sizeHeads = simuHead.shape[1] * simuHead.shape[2]
+        sizeHeads = refHead.shape[1] * refHead.shape[2]
         
         mae = mae / (sizeHeads)
         rmse = math.sqrt(rmse / sizeHeads)
-
-        storeErrorValuesIntoCSVFile(ref, modelname, site_name, numPrd, simuTimes[numPrd], mae, mre, rmse)
         
-
+        storeErrorValuesIntoCSVFileByInterpolation(ref, modelname, site_name, day, refTimes[day], mae, mre, rmse, startTime, endTime)
 
 
 
@@ -101,6 +138,28 @@ def storeErrorValuesIntoCSVFile(ref, modelname, site_name, periodNumber, simulat
         print("MRE value : ", mre)
         print("RMSE value : ", rmse)
 
+def storeErrorValuesIntoCSVFileByInterpolation(ref, modelname, site_name, periodNumber, simulatedDuration, mea, mre, rmse, startTime, endTime):
+    simuRepo = getPathToSimulationDirectoryFromModelname(modelname, site_name)
+    nbPart = str(startTime) + "_" + str(endTime)
+    if (periodNumber == startTime):
+        with open(simuRepo + "/" + modelname + '_Ref_' + ref + '_errorsresult_interpolation_' + str(nbPart) + '.csv', 'w') as f:
+            writer = csv.writer(f, delimiter=';')
+            writer.writerow(['Period Number', 'Simulated Time', 'MAE', 'MRE', 'RMSE'])
+            writer.writerow([periodNumber, simulatedDuration, mea, mre, rmse])
+        print("MEA value : ", mea)
+        print("MRE value : ", mre)
+        print("RMSE value : ", rmse) 
+
+
+    else:
+        with open(simuRepo + "/" + modelname + '_Ref_' + ref + '_errorsresult_interpolation_' + str(nbPart) + '.csv', 'a') as f:
+            writer = csv.writer(f, delimiter=';')
+            writer.writerow([periodNumber, simulatedDuration, mea, mre, rmse])
+        print("-------------------------")
+        print("MEA value : ", mea)
+        print("MRE value : ", mre)
+        print("RMSE value : ", rmse)
+
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
@@ -108,20 +167,40 @@ if __name__ == '__main__':
     parser.add_argument("-m", "--modelname", type=str, required=True)
     parser.add_argument("-site", "--sitenumber", type=int, required=True)
     parser.add_argument("-ts", "--timestep", type=int, required=False)
+    parser.add_argument("-stime", "--starttime", type=int, required=False)
+    parser.add_argument("-etime", "--endtime", type=int, required=False)
+    #parser.add_argument("-c", "--corenumber", type=int, required=True)
     args = parser.parse_args()
 
     ref = args.ref
     modelname = args.modelname
     site_number = args.sitenumber
     timestep = args.timestep
+    startTime = args.starttime
+    endTime = args.endtime
+    #coeur = args.corenumber
 
     if ref is None:
         ref = "model_time_0_geo_0_thick_1_K_86.4_Sy_0.1"
 
     if timestep is None :
-        computeErrorRatesFromModelnames(ref, modelname, site_number)
+        computeErrorRatesFromModelnamesByInterpoliationOptiParalFixedInit(ref, modelname, site_number, startTime, endTime)
     else :
-        computeErrorRatesFromModelnames(ref, modelname, site_number, timestep)
-    
+        computeErrorRatesFromModelnamesByInterpoliationOptiParalFixedInit(ref, modelname, site_number, startTime, endTime, timestep)
+    # if timestep is None:
+    #     timestep = 1
 
 
+    # compt=0
+    # #coeur=6
+    # sims = list(range(1, 15340, 100))
+    # sims.append(15340)
+
+    # for ind in range(1, len(sims)):
+    #     compt += 1
+    #     t = threading.Thread(target=computeErrorRatesFromModelnamesByInterpoliationOptiParal, args=(ref, modelname, site_number, sims[ind-1], sims[ind], timestep))
+    #     t.start()
+    #     if int(compt / coeur) == compt / coeur:  # Si compt est multiple de 3
+    #         t.join()  # alors on attend que les modèles soient terminées pour recommencer
+    #         print(compt)
+    # t.join() # On attend que les modèles soient finis pour terminer le calcul
