@@ -1,89 +1,147 @@
-import re
-import os
-import numpy as np
+## Execution time
+
+import math
+import argparse
+import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
-import matplotlib.pyplot as plt
+from numpy import median
 
 
-def getConcatDfFromExecutionTimeAndErrorDf(dfDiff, l, taille, exec_t, duration):
-    a_exec_time = np.array([exec_t]*taille)
-    df_exectime = pd.DataFrame(data=a_exec_time, index=l.index, columns=['Execution Time'])
-    df_dur = pd.DataFrame(data=[duration]*taille, index=l.index, columns=['Period Duration'])
-    ens = pd.concat([l, df_exectime, df_dur], axis=1)
-    dfDiff = pd.concat([dfDiff, ens])
-    return dfDiff
+def createExecTimePlotOfIndicatorFromCSVGlobalFile(indicator, rech=False, chronicle=False, sitename="Agon-Coutainville", refValues=True, log=False):
+    repo = "/DATA/These/Projects/Model/app/exps/"
+    name = "Exps_" + indicator + "_Indicator_" + sitename
+    if refValues:
+        name+= "_withref"
+    if chronicle :
+        name+= "_chronicle"
+    if rech :
+        name += "_rech"
 
-def getExecutionTimeFromListFile(file):
-    with open(file,'r') as f:
-        lines = f.readlines()
-        if lines:
-            beforelast_line = lines[-2]
-    beforelast_line=beforelast_line.rstrip()
-
-    m = re.search(r'\sElapsed run time:\s+(?:(\d*)?(?:\sDays,\s*))?(?:(\d*)(?:\s*Hours,\s*))?(?:(\d*)(?:\s*Minutes,\s*))?(\d*[.]*\d*)\sSeconds', beforelast_line)
-    if (m.group(1) is None) and (m.group(2) is None) and (m.group(3) is None):
-        exec_time = float(m.group(4))
-    elif (m.group(1) is None) and (m.group(2) is None):
-        exec_time = int(m.group(3))*60 + float(m.group(4))      
-    elif (m.group(1) is None):
-        exec_time = int(m.group(2))*60*60 + int(m.group(3))*60 + float(m.group(4))
+    file = repo + name + ".csv"
+    dfp = pd.read_csv(repo + file, sep=",")
+    
+    suffix = ""
+    
+    if rech:
+        number_colors = 11
+        dfp = dfp.reindex([10,0,1,2,3,4,5,6,7,8,9])
+        approximation = "recharge threshold"
+        suffix += "_rech"
     else:
-        exec_time = int(m.group(1))*24*60*60 + int(m.group(2))*60*60 + int(m.group(3))*60 + float(m.group(4))
-    return int(exec_time)
+        number_colors = 9
+        dfp = dfp.reindex([8,6,1,0,3,7,4,5,2])
+        approximation = "period duration"
+    colors = sns.color_palette("hls", number_colors)
 
 
-mainRepo = "/DATA/These/Projects/Model/app/Agon-Coutainville/"
-ref = "model_time_0_geo_0_thick_1_K_86.4_Sy_0.1"
+    if chronicle:
+        suffix += "_chronicle"
+    if refValues:
+        suffix += "_withref"
 
-duration = 3562
-repo10yearsCsv = "model_time_0_geo_0_thick_1_K_86.4_Sy_0.1_Periodtenyear_Step1/model_time_0_geo_0_thick_1_K_86.4_Sy_0.1_Periodtenyear_Step1_Ref_model_time_0_geo_0_thick_1_K_86.4_Sy_0.1_errorsresult.csv"
+    if log:
+        for index, row in dfp.iterrows():
+            print(row["H Error"], index)
+        if index != 10:
+            print(index)
+            dfp["H Error"][index] = math.log(row["H Error"])
+        else:
+            dfp["H Error"][index] = -float('Inf')
+            dfp["H Error"][index] = math.log(dfp["H Error"][index])
 
-dfDiff = pd.DataFrame(columns=['Period Number', 'Simulated Time', 'MAE', 'MRE', 'RMSE', 'Execution Time', 'Period Duration'])
-df10y = pd.read_csv(mainRepo + repo10yearsCsv, sep= ";")
-
-times = df10y["Simulated Time"]
-
-file = mainRepo + "model_time_0_geo_0_thick_1_K_86.4_Sy_0.1_Periodtenyear_Step1/model_time_0_geo_0_thick_1_K_86.4_Sy_0.1_Periodtenyear_Step1.list" 
-
-
-
-exec_time = getExecutionTimeFromListFile(file)
-dfDiff = getConcatDfFromExecutionTimeAndErrorDf(dfDiff, df10y, len(times), exec_time, duration)
-
-simulations = ["model_time_0_geo_0_thick_1_K_86.4_Sy_0.1_Periodtwoyear_Step1", "model_time_0_geo_0_thick_1_K_86.4_Sy_0.1_Periodyear_Step1", "model_time_0_geo_0_thick_1_K_86.4_Sy_0.1_Periodsemester_Step1", "model_time_0_geo_0_thick_1_K_86.4_Sy_0.1_Periodtrimester_Step1"]
-durations = [730, 365, 182, 91]
-for nb in range(len(simulations)):
-    dfSimu = pd.read_csv(mainRepo + simulations[nb] + "/" + simulations[nb] + "_Ref_" + ref + "_errorsresult.csv", sep=";")
-    z=pd.DataFrame()
-    for t in times:
-        l = dfSimu.loc[dfSimu["Simulated Time"] == t]
-        z = pd.concat([z,l])
-    exec_t = getExecutionTimeFromListFile(mainRepo + simulations[nb] + "/" + simulations[nb] + ".list")
-    dfDiff = getConcatDfFromExecutionTimeAndErrorDf(dfDiff, z, len(times), exec_t, durations[nb])
+        suffix+= "_log"   
 
 
-dfDiff.to_csv(os.path.join('/'.join(mainRepo.split('/')[:-2]), "exps/") + "exps_sameNbDiff.csv")
+    a = sns.relplot(x="Execution Time", y=indicator + " Error", hue="Approximation", palette=colors[::-1],data=dfp)
+    a.set(xlabel='Execution Time (s)', ylabel=indicator + ' Indicator (m)')
+    plt.plot(dfp['Execution Time'], dfp[indicator + " Error"], linewidth=2, alpha=0.2)
+    a.fig.suptitle("Evolution of " + indicator + " indicator value according to the execution time \n Approximation with " + approximation + "\n" + sitename + "site")
+    plt.subplots_adjust(top=0.8)
+    
+    max_exec_time = dfp[dfp[indicator + " Error"]!=0]["Execution Time"]
+    H_threshold = 0.1
+    plt.plot([0, max_exec_time], [H_threshold, H_threshold], linewidth=2, alpha=0.7, color="Red", dashes=[6, 2])  
+    
+    a.savefig(repo + 'Plot_' + indicator + '_Indicator_ExecTime_' + sitename + suffix + '.png')
+
+def createApproxPlotOfIndicatorFromCSVGlobalFile(indicator, rech=False, chronicle=False, sitename="Agon-Coutainville", refValues=True, log=False):
+    repo = "/DATA/These/Projects/Model/app/exps/"
+    name = "Exps_" + indicator + "_Indicator_" + sitename
+    if refValues:
+        name+= "_withref"
+    if chronicle :
+        name+= "_chronicle"
+    if rech :
+        name += "_rech"
+
+    file = repo + name + ".csv"
+    dfp = pd.read_csv(repo + file, sep=",")
+    
+    suffix = ""
+    
+    if rech:
+        number_colors = 11
+        dfp = dfp.reindex([10,0,1,2,3,4,5,6,7,8,9])
+        approximation = "recharge threshold"
+        suffix += "_rech"
+    else:
+        number_colors = 9
+        dfp = dfp.reindex([8,6,1,0,3,7,4,5,2])
+        approximation = "period duration"
+    colors = sns.color_palette("hls", number_colors)
 
 
-################## Plotting ################
+    if chronicle:
+        suffix += "_chronicle"
+    if refValues:
+        suffix += "_withref"
+
+    if log:
+        for index, row in dfp.iterrows():
+            print(row["H Error"], index)
+        if index != 10:
+            print(index)
+            dfp["H Error"][index] = math.log(row["H Error"])
+        else:
+            dfp["H Error"][index] = -float('Inf')
+            dfp["H Error"][index] = math.log(dfp["H Error"][index])
+
+        suffix+= "_log"   
 
 
-exps = pd.read_csv("/DATA/These/Projects/Model/app/exps/exps_sameNbDiff.csv", sep=",")
-fig, axs = plt.subplots(ncols=2)
+    a = sns.relplot(x="Approximation", y=indicator + " Error", hue="Approximation", palette=colors[::-1],data=dfp)
+    a.set(xlabel=approximation, ylabel=indicator + ' Indicator (m)')
+    plt.plot(dfp['Approximation'], dfp[indicator + " Error"], linewidth=2, alpha=0.2)
+    a.fig.suptitle("Evolution of " + indicator + " indicator value according to the approximation rate \n Approximation with " + approximation + "\n" + sitename + "site")
+    plt.subplots_adjust(top=0.8)
+    
+    max_exec_time = dfp[dfp[indicator + " Error"]!=0]["Execution Time"]
+    H_threshold = 0.1
+    plt.plot([0, max_exec_time], [H_threshold, H_threshold], linewidth=2, alpha=0.7, color="Red", dashes=[6, 2])  
+    
+    a.savefig(repo + 'Plot_' + indicator + '_Indicator_ApproxRate_' + sitename + suffix + '.png')
 
-plt.xticks(rotation=45)
-colors = sns.color_palette("hls", 5)
-a = sns.boxplot(x="Period Duration", y="RMSE", data=exps, ax=axs[0], palette = colors)
-a.set(xlabel='Period Duration (days)', ylabel='Different of \ngroundwater table roof values(m)')
 
+if __name__ == '__main__':
 
-b = sns.boxplot(x="Execution Time", y="RMSE", data=exps, ax=axs[1], palette=colors[::-1])
-b.set(xlabel='Execution Time (seconds)', ylabel='Different of \ngroundwater table roof values(m)')
-
-for ax in fig.axes:
-    plt.sca(ax)
-    plt.xticks(rotation=45)
-fig.tight_layout()
-
-fig.savefig('/DATA/These/Projects/Model/app/exps/'+'Boxplot_diffwatertable_accordingto_durationOfperiod_executionTime_SameNumberOfDiffs.png')
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-ind", "--indicator", type=int, required=True)
+    parser.add_argument("-site", "--site", help= "2: Agon-Coutainville or 3:Saint-Germain-Sur-Ay", type=str, required=True)
+    parser.add_argument("-ref", "--reference", action='store_true')
+    parser.add_argument("-chr", "--chronicle", action='store_true')
+    parser.add_argument("-rech", "--recharge", action='store_true')
+    parser.add_argument("-log", "--log", action='store_true')
+    args = parser.parse_args()
+    
+    if args.site == 2:
+        sitename = "Agon-Coutainville"
+    elif args.site == 3:
+        sitename = "Saint-Germain-Sur-Ay"
+    chronicle = args.chronicle
+    refValues = args.reference
+    outliers = True
+    rech=args.recharge
+    indicator = args.indicator
+    log = args.log
+    createExecTimePlotOfIndicatorFromCSVGlobalFile(indicator, rech=rech, chronicle=chronicle, sitename=sitename, refValues=refValues, log=log)
