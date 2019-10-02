@@ -2,6 +2,7 @@
 """
     Provides functions to manipulate the inputfile which is given as input to the flow model. 
     It is then parsed for the embedded information to be given to the modflow executable.
+    DEPRECIATED !!!!
 """
 import pandas as pd
 import re

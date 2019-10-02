@@ -1,61 +1,29 @@
-import os
+"""
+TO DO : function to create file from a chronicle
+
+"""
+import os, sys
 import pandas as pd
 import argparse
 import numpy as np
 
-def extractDfFromRefInputFile(inputName):
-    inputRepo = "data"
-    inputPath = os.path.join('/'.join(os.getcwd().split('/')), inputRepo, inputName)
-    df = pd.read_csv(inputPath, sep='\t', dtype=np.float64)
+# sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'helpers'))
+import helpers as hlp
+
+def extract_df_from_ref_input_file(input_name):
+    input_path = os.path.join('/'.join(os.path.realpath(__file__).split('/')[:-2]), "data", input_name)
+    df = pd.read_csv(input_path, sep='\t', dtype=np.float64)
     return df
 
-def getNumberOfLinesToReduceInLoop(prd):
-    if (prd == "semester"):
-        period = [182, 183, 182, 183, 183, 183, 183, 182]
-    elif (prd== "trimester"):
-        period = [91, 91, 91, 92, 91, 91, 91, 92, 92, 91, 91, 92, 91, 91, 91, 92]
-    elif (prd == "monthly"):
-        period = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
-        period.extend([31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31])
-        period.extend([31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31])
-        period.extend([31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31])
-    elif (prd == "weekly"):
-        period = [7] * 52
-        period.append(1)
-        period.extend([7] * 52)
-        period.append(1)
-        period.extend([7]*52)
-        period.append(2)
-        period.extend([7] * 52)
-        period.append(1)
-    elif (prd == "twodays"):
-        period = [2]
-    elif (prd == "daily"):
-        period = [1]
-    elif (prd == "init"):
-        period = [1]
-    elif (prd == "year"):
-        period = [365, 365, 366, 365]
-    elif (prd == "twoyear"):
-        period = [730, 731]
-    elif (prd == "tenyear"):
-        period = [3652, 3653]
-    elif (prd == "tendays"):
-        period = [10]
-    elif (prd == "hundreddays"):
-        period = [100]
-    return period
 
-# nbTotalLines = len(df.index)
-
-def getIndexesToRemain(nbTotalLines, period):
+def get_indexes_to_remain(number_lines, period):
     ligne = 1
     indexes = [0,1]
     taille_period = len(period)
     i = 0
-    while (ligne < nbTotalLines-1):
+    while (ligne < number_lines-1):
         ligne += period[i]
-        if (ligne < nbTotalLines-1):
+        if (ligne < number_lines-1):
             indexes.append(ligne)
         if (i == (taille_period-1)):
             i = 0
@@ -63,63 +31,72 @@ def getIndexesToRemain(nbTotalLines, period):
             i += 1
     return indexes
 
-def getIndexesToRemainForRechThreshold(df, nbTotalLines, rechThr):
+def get_indexes_to_remain_for_rech_threshold(df, number_lines, rech_thr):
+    '''
+        TODO
+
+    '''
     indexes = [0,1]
-    rechCompt = 0
-    for ligne in range(1, nbTotalLines):
+    rech_compt = 0
+    for ligne in range(1, number_lines):
         rl = df['rech'][ligne]
-        predCompt = rechCompt + rl
-        if (ligne != nbTotalLines-1):
-            if (predCompt > rechThr):
-                if (predCompt - rechThr) < (rechThr - rechCompt):
+        pred_compt = rech_compt + rl
+        if (ligne != number_lines-1):
+            if (pred_compt > rech_thr):
+                if (pred_compt - rech_thr) < (rech_thr - rech_compt):
                     indexes.append(ligne+1) # the line number ligne is included in perforation. The following line is the line to remain
                 else:
-                    indexes.append(ligne) # the line number ligne is not included in perforation and is the next line to remain
-                rechCompt = 0
+                    if indexes[-1] != ligne:
+                        indexes.append(ligne) # the line number ligne is not included in perforation and is the next line to remain
+                rech_compt = 0
             else:
-                rechCompt = predCompt
+                rech_compt = pred_compt
         else: # Last line
-            if (predCompt > rechThr):
-                if (predCompt - rechThr) >= (rechThr - rechCompt):
+            if (pred_compt > rech_thr):
+                if (pred_compt - rech_thr) >= (rech_thr - rech_compt):
                     indexes.append(ligne)
     return indexes
 
 
-def modifyValuesInLinesToRemain(df, indexes, nbTotal):
+def aggregate_values(df, indexes, nb_rows):
+    '''
+        TODO
+    '''
     df.loc[0,'rech'] = float(df['rech'].mean()) #df['rech'][0]
-    print("mean init for inputfile: " + str(float(df['rech'].mean())))
-    #print(df.loc[0,'rech'])
-    for i in range(1, len(indexes)): #Initialisation has to remain so strating at period number 1. Initialisation period is number 0.
+    print("mean init for inputfile: ", df.loc[0,'rech'])
+
+    for i in range(1, len(indexes)):
+        #print(i)
+       #  print(indexes[3+1], indexes[3]) #Initialisation has to remain so strating at period number 1. Initialisation period is number 0.
         if i < (len(indexes)-1):
             for z in range(indexes[i]+1, indexes[i+1]): #+1 pour ne pas compter la valeur df.iat[indexes[i]] une deuxième fois
                 df.iat[indexes[i], 4] += df['rech'][z]
-            df.iat[indexes[i], 4] = df.iat[indexes[i], 4] / \
-                (indexes[i+1]-indexes[i])
-            df.iat[indexes[i], 1] = indexes[i+1]-indexes[i]
+            df.iat[indexes[i], 4] = float(df.iat[indexes[i], 4]) / (indexes[i+1] - indexes[i])
+            df.iat[indexes[i], 1] = indexes[i+1] - indexes[i]
         else:
-            for z in range(indexes[i]+1, nbTotal):
+            for z in range(indexes[i]+1, nb_rows):
                 df.iat[indexes[i], 4] += df['rech'][z]
-            df.iat[indexes[i], 4] = df.iat[indexes[i], 4]/(nbTotal-indexes[i])
-            df.iat[indexes[i], 1] = nbTotal-indexes[i]
+            df.iat[indexes[i], 4] = df.iat[indexes[i], 4] / (nb_rows - indexes[i])
+            df.iat[indexes[i], 1] = nb_rows-indexes[i]
     return df
 
-def modifyValuesInLinesToRemainWithSeaLvl(df, indexes, nbTotal):
+def modifyValuesInLinesToRemainWithSeaLvl(df, indexes, nb_rows):
     for i in range(len(indexes)):
         if i < (len(indexes)-1):
             for z in range(indexes[i]+1, indexes[i+1]):
                 df.iat[indexes[i], 4] += df['rech'][z]
             df.iat[indexes[i], 4] = df.iat[indexes[i], 4] / \
-                (indexes[i+1]-indexes[i])
-            df.iat[indexes[i], 1] = indexes[i+1]-indexes[i]
+                (indexes[i+1] - indexes[i])
+            df.iat[indexes[i], 1] = indexes[i+1] - indexes[i]
         else:
-            for z in range(indexes[i]+1, nbTotal):
+            for z in range(indexes[i]+1, nb_rows):
                 df.iat[indexes[i], 4] += df['rech'][z]
-            df.iat[indexes[i], 4] = df.iat[indexes[i], 4]/(nbTotal-indexes[i])
-            df.iat[indexes[i], 1] = nbTotal-indexes[i]
+            df.iat[indexes[i], 4] = df.iat[indexes[i], 4] / (nb_rows - indexes[i])
+            df.iat[indexes[i], 1] = nb_rows - indexes[i]
     return df
 
 
-def removeLinesExceptThoseWithFollowingIndexes(df, indexes):
+def keep_only_rows_with_indexes(df, indexes):
     index_remove = []
     for y in range(0, len(df.index)):
         index_remove.append(y)
@@ -132,76 +109,74 @@ def removeLinesExceptThoseWithFollowingIndexes(df, indexes):
     return df
 
 
-def changeTimestepValue(df, timestepValue):
+def change_time_step(df, timestepValue):
     df["time_step"][1:] = timestepValue #[1:] when initialisation was conserved
     return df
 
 
-def changePeriodValue(df, periodValue):
-    df["sp_length"] = periodValue
-    return df
-
-
-def writeInputFile(modelname, df):
+def write_custom_input_file(modelname, df):
     outputname = "input_file_" + modelname + ".txt"
-    filepath = os.path.join('/'.join(os.getcwd().split('/')), "data", outputname)
+    filepath = os.path.join('/'.join(os.path.realpath(__file__).split('/')[:-2]) , "data", outputname)
     df.to_csv(filepath, sep="\t", index=False)
     return outputname
 
-def manipulateInputFile(inputName, prd, timestepValue, rechThreshold): #, periodValue
-    df = extractDfFromRefInputFile(inputName)
+def manipulate_ref_input_file(template_name,  approx, rate, steady, time_step=None): #, periodValue
+    df = extract_df_from_ref_input_file(template_name)
+    if steady :
+        df.loc[0,'rech'] = float(df['rech'].mean()) #df['rech'][0]
+        print("mean init for inputfile: ", df.loc[0,'rech'])
+        df = df.iloc[[0]]
+        print(df)
 
-    if rechThreshold is not None:
-        indexes = getIndexesToRemainForRechThreshold(df, len(df.index), rechThreshold)
+    else:
+        if approx==0:
+                period = [int(rate)] #getNumberOfLinesToReduceInLoop(prd)
+                indexes = get_indexes_to_remain(len(df.index), period)
+        elif approx==1:
+                indexes = get_indexes_to_remain_for_rech_threshold(df, len(df.index), rate)    
 
-    if (prd != "init") and (prd is not None):
-        period = getNumberOfLinesToReduceInLoop(prd)
-        indexes = getIndexesToRemain(len(df.index), period)
-
-    df = modifyValuesInLinesToRemain(df, indexes, len(df.index))
-    df = removeLinesExceptThoseWithFollowingIndexes(df, indexes)
-    
-    if timestepValue is not None:
-        df = changeTimestepValue(df, timestepValue)
+        df = aggregate_values(df, indexes, len(df.index))
+        df = keep_only_rows_with_indexes(df, indexes)
+        
+        if time_step is not None:
+            df = change_time_step(df, time_step)
 
     return df
 
-def writeInputFileAfterManipulation(modelname, prd, timestepValue, rechThreshold, inputName):
-    print("inp :" + inputName)
-    df = manipulateInputFile(inputName, prd, timestepValue, rechThreshold) #, periodValue
-    outputname = writeInputFile(modelname, df)
-    return outputname
+def generate_custom_input_file(model_name, input_name, approx, rate, chronicle, steady, time_step=None):
+    folder_path = '/'.join((os.path.dirname((os.path.abspath(__file__)))).split('/')[:-1])
+    chronicle_file = pd.read_table(folder_path + "/data/chronicles.txt", sep=',', header=0, index_col=0)
+    template_file = chronicle_file.template[chronicle]
+    df = manipulate_ref_input_file(template_file,  approx, rate, steady, time_step=time_step)
+    if model_name is None:
+        model_name = hlp.generate_model_name(chronicle, approx, rate, ref=False, steady=steady)
+    output_name = write_custom_input_file(model_name, df)
+    return output_name
 
 if __name__ == '__main__':
-    # if len(sys.argv) == 1:
-    #     servername = 'localhost'
-    #     port = 1883
-    # elif len(sys.argv) == 2:
-    #     servername = sys.argv[1]
-    #     port = 1883
-    # elif len(sys.argv) == 3:
-    #     servername = sys.argv[1]
-    #     port = sys.argv[2]
-    # else:
-    #     print(__doc__)
-
     ### Parser ###
     parser = argparse.ArgumentParser()
-    parser.add_argument("-p", "--period", type=str, required=False)
+    parser.add_argument("-rate", "--rate", type=float, required=False, help="Rate to which aggregate lines of the input file")
     parser.add_argument("-ts", "--timestep", type=int, required=False)
-    parser.add_argument("-r", "--rechthreshold", type=int, required=False)
-    parser.add_argument("-m", "--modelname", type=str, required=True)
-    parser.add_argument("-i", "--inputfile", help="Name of the input file to take as reference", type=str, required=False)
+    parser.add_argument("-chr", "--chronicle", type=int, required=True)
+    parser.add_argument("-m", "--modelname", type=str, required=False)
+    parser.add_argument("-templ", "--template", help="Name of the input file to take as reference", type=str, required=False)
+    parser.add_argument("-approx", '--approximation', type=int, required=False)
+    parser.add_argument("-sd", "--steady", action='store_true')
     args = parser.parse_args()
 
-    # Parameters
-    if args.inputfile is None:
-        inputName = "input_file.txt"
-    else:
-        inputName = args.inputfile
-    timestepValue = args.timestep
-    modelname = args.modelname
-    rechThreshold = args.rechthreshold
-    prd = args.period
+    input_name = args.template
+    time_step = args.timestep
+    model_name = args.modelname
+    rate = args.rate
+    approx = args.approximation
+    chronicle = args.chronicle
+    steady = args.steady
 
-    writeInputFileAfterManipulation(modelname, prd, timestepValue, rechThreshold, inputName)
+    if time_step is None:
+        out = generate_custom_input_file(model_name, input_name, approx, rate, chronicle, steady)
+    else:
+        out = generate_custom_input_file(model_name, input_name, approx, rate, chronicle, steady, time_step=time_step)
+    print("custom input file name : ", out)
+
+# By default time_step = None

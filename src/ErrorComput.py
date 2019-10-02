@@ -17,6 +17,9 @@ import flopy
 import pickle
 import statistics
 
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'custom_utils'))
+from custom_utils import helpers as utils
+
 __author__ = "June Sallou"
 __maintainer__ = "June Sallou"
 __credits__ = ["June Sallou"]
@@ -25,8 +28,6 @@ __version__ = "0.0.3"
 __date__ = "04/30/2019"
 __email__ = "june.benvegnu-sallou@univ-rennes1.fr"
 
-
-mainAppRepo = os.path.dirname(os.path.abspath(__file__)) + '/'
 
 # Simulation features
 nb_years = 42 # Duration
@@ -37,6 +38,8 @@ tsmax = 121  # 4 months = 121,75 days
 max_diff_threshold = 7 # max discrancy of the duration of flood episode
 dc = 0.3  # depth of threshold for the undeground vulnerable zone
 alpha = float(1/3)
+
+mainAppRepo = os.path.dirname(os.path.abspath(__file__)) + '/'
 
 def get_model_name(site_number, chronicle, approx, rate, ref):
     model_name = "model_time_0_geo_0_thick_1_K_86.4_Sy_0.1_Step1_site" + str(site_number) + "_Chronicle" + str(chronicle)
@@ -49,18 +52,16 @@ def get_model_name(site_number, chronicle, approx, rate, ref):
     return model_name
 
 
-def get_path_to_simulation_directory(site_number, chronicle, approx, rate, ref):
-    model_name = get_model_name(site_number, chronicle, approx, rate, ref)
-    site_name = get_site_name_from_site_number(site_number)
-    return os.path.join(mainAppRepo, "outputs/", site_name, model_name)
-
-
 def get_site_name_from_site_number(site_number):
     sites = pd.read_csv(mainAppRepo + 'data/study_sites.txt',
                         sep=',', header=0, index_col=0) #\\s+
     site_name = sites.index._data[site_number] + '/'
     return site_name
 
+def get_path_to_simulation_directory(site_number, chronicle, approx, rate, ref):
+    model_name = get_model_name(site_number, chronicle, approx, rate, ref)
+    site_name = get_site_name_from_site_number(site_number)
+    return os.path.join(mainAppRepo, "outputs/", site_name, model_name)
 
 def get_non_dry_cell_hds_value(hds, nrow, ncol, nlayer):
     layer = 0
@@ -108,7 +109,7 @@ def get_soil_surface_values_for_a_simulation(repo_simu, model_name):
     return topo
 
 
-    def compute_h_error_by_interpolation(site_number, chronicle, approx, rate, ref, folder, time_step=1):
+def compute_h_error_by_interpolation(site_number, chronicle, approx, rate, ref, folder, time_step=1):
     # Get data for reference simulation
     # Path to repository
     ref_name = get_model_name(site_number, chronicle, approx, rate, ref=True)
