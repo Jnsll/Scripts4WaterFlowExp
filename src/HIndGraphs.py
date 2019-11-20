@@ -100,18 +100,8 @@ def createGlobalCSVFile(indicator, folder, site, chronicle, approx):
     dfglob.to_csv(mainRepo + output + ".csv")
 
 
-# def create_global_file_for_learning(folder):
-
-    # Get the data fro the 4 cases of a site (couple chr & approx)
- 
-
-    # H_ind = pd.read_csv("Exps_H_Indicator_" + site_name + "_Chronicle" + str(chr) + "_Approx" + str(approx) + ".csv")
-    
-    # steady = pd.read_csv()
-    #dataframe.to_csv( + ".csv")
-    
-
 if __name__ == '__main__':
+
     parser = argparse.ArgumentParser()
     parser.add_argument("-ind", "--indicator", type=str, required=True)
     parser.add_argument("-site", "--site", type=int, help= "2: Agon-Coutainville or 3:Saint-Germain-Sur-Ay", required=True)

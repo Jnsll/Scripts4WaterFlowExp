@@ -1,5 +1,3 @@
-## Execution time
-
 import math
 import os
 import argparse
@@ -16,6 +14,61 @@ def get_site_name_from_site_number(site_number):
     site_name = sites.index._data[site_number]
     return site_name
 
+
+def createNbLinesPlotOfIndicatorFromCSVGlobalFile(indicator, folder, site, chronicle, approx, log=False):
+    repo = folder
+    site_name = get_site_name_from_site_number(site)
+    name = "Exps_" + indicator + "_Indicator_" + site_name + "_Chronicle"+ str(chronicle) + "_Approx" + str(approx)
+
+
+    file = repo + site_name + "/" + name + ".csv"
+    dfp = pd.read_csv(file, sep=",")
+        
+    suffix = ""
+        
+    if approx == 1:
+        number_colors = 11
+            #dfp = dfp.reindex([10,0,1,2,3,4,5,6,7,8,9])
+        approximation = "recharge threshold"
+            #suffix += "_rech"
+    else:
+        number_colors = 9
+            #dfp = dfp.reindex([8,6,1,0,3,7,4,5,2])
+        approximation = "period duration"
+    colors = sns.color_palette("hls", number_colors)
+
+
+    if log:
+        for index, row in dfp.iterrows():
+                #print(row["H Error"], index)
+            if index != 8:
+                    #print(index)
+                #dfp.loc[index,"H Error"] = math.log(row["H Error"])
+                dfp.loc[index,"Execution Time"] = math.log(row["Execution Time"])
+            else:
+                    #dfp.loc[index,"H Error"] = -float('Inf')
+                    #dfp.loc[index,"H Error"] = math.log(-float('Inf'))
+                dfp.loc[index,"Execution Time"] = math.log(row["Execution Time"])
+                    #dfp.loc[index,"Execution Time"] = math.log(-float('Inf'))
+
+        suffix+= "_log"   
+
+
+    a = sns.relplot(x="Number of Lines", y=indicator + " Error", hue="Approximation", palette=colors[::-1],data=dfp)
+    a.set(xlabel='Number of Lines', ylabel=indicator + ' Indicator (m)')
+    plt.plot(dfp['Number of Lines'], dfp[indicator + " Error"], linewidth=2, alpha=0.2)
+    a.fig.suptitle("Evolution of " + indicator + " indicator value according to the number of lines \n Approximation with " + approximation + "\n" + site_name + " site")
+    plt.subplots_adjust(top=0.8)
+        
+    max_exec_time = dfp[dfp[indicator + " Error"] == 0]["Number of Lines"] #-float('Inf')
+    print(max_exec_time)
+    if log:
+        H_threshold = math.log(0.1)
+    else:
+        H_threshold = 0.1
+    plt.plot([0, max_exec_time], [H_threshold, H_threshold], linewidth=3, alpha=0.7, color="Red", dashes=[6, 2])  
+        
+    a.savefig(repo + site_name + "/" + 'Plot_' + indicator + '_Indicator_NbLines_' + site_name + "_Chronicle"+ str(chronicle) + "_Approx" + str(approx) + suffix + '.png')
 
 def createExecTimePlotOfIndicatorFromCSVGlobalFile(indicator, folder, site, chronicle, approx, log=False):
     
@@ -210,6 +263,7 @@ if __name__ == '__main__':
     parser.add_argument("-approx", "--approximation", type=int)
     parser.add_argument("-log", "--log", action='store_true')
     parser.add_argument("-f", "--folder", type=str, required=True)
+    parser.add_argument("-nbl", "--nblines", action='store_true')
 
     args = parser.parse_args()
     
@@ -220,5 +274,9 @@ if __name__ == '__main__':
     indicator = args.indicator
     log = args.log
     folder = args.folder
+    nb = args.nblines
     #createTwoApproxExecTimePlotOfIndicatorFromCSVGlobalFile(indicator, rech=rech, chronicle=chronicle, sitename=sitename, refValues=refValues, log=log)
-    createExecTimePlotOfIndicatorFromCSVGlobalFile(indicator, folder, site, chronicle, approx, log=False)
+    if nb:
+        createNbLinesPlotOfIndicatorFromCSVGlobalFile(indicator, folder, site, chronicle, approx, log=False)
+    else:
+        createExecTimePlotOfIndicatorFromCSVGlobalFile(indicator, folder, site, chronicle, approx, log=False)
