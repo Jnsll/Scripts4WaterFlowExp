@@ -2,7 +2,6 @@ import re
 import os
 import numpy as np
 import pandas as pd
-import seaborn as sns
 import matplotlib.pyplot as plt
 import argparse
 
@@ -42,7 +41,7 @@ def getExecutionTimeFromListFile(file):
         exec_time = int(m.group(3))*60 + float(m.group(4))      
     elif (m.group(1) is None):
         exec_time = int(m.group(2))*60*60 + int(m.group(3))*60 + float(m.group(4))
-        print(m.group(2), m.group(3), m.group(4), exec_time)
+        #print(m.group(2), m.group(3), m.group(4), exec_time)
     else:
         exec_time = int(m.group(1))*24*60*60 + int(m.group(2))*60*60 + int(m.group(3))*60 + float(m.group(4))
     return int(exec_time)
@@ -53,7 +52,7 @@ def get_number_of_lines_in_input_file(file):
         count = sum(1 for _ in f)
     return count
 
-def createGlobalCSVFile(indicator, folder, site, chronicle, approx):
+def createCSVFileForASiteAndAContext(indicator, folder, site, chronicle, approx):
     """
     sitename : #Agon-Coutainville #Saint-Germain-Sur-Ay
     
@@ -84,16 +83,19 @@ def createGlobalCSVFile(indicator, folder, site, chronicle, approx):
             df = pd.DataFrame(data=d)
         else:
             filename = simuRepo + "_Ref_" + ref_name + "_errorsresult_" + indicator +"_light.csv"
-            df = pd.read_csv(mainRepo + simuRepo + "/" + filename, sep=";")
-
-    
-        taille = len(df.index)
-        df_dur = pd.DataFrame(data=[approximations[ind]]*taille, index=df.index, columns=['Approximation'])
-        exec_time = getExecutionTimeFromListFile(mainRepo + simuRepo + "/" + simuRepo + ".list")
-        df_time = pd.DataFrame(data=[exec_time]*taille, index=df.index, columns=['Execution Time'])
-        df_lines = pd.DataFrame(data=[nb_lines[ind]]*taille, index=df.index, columns=['Number of Lines'])
-        df = pd.concat([df, df_dur, df_time, df_lines], axis=1)
-        dfglob = pd.concat([dfglob,df])
+            try:
+                df = pd.read_csv(mainRepo + simuRepo + "/" + filename, sep=";")
+            except:
+                print("File does not exist")
+                df = pd.DataFrame()
+        if not df.empty:
+            taille = len(df.index)
+            df_dur = pd.DataFrame(data=[approximations[ind]]*taille, index=df.index, columns=['Approximation'])
+            exec_time = getExecutionTimeFromListFile(mainRepo + simuRepo + "/" + simuRepo + ".list")
+            df_time = pd.DataFrame(data=[exec_time]*taille, index=df.index, columns=['Execution Time'])
+            df_lines = pd.DataFrame(data=[nb_lines[ind]]*taille, index=df.index, columns=['Number of Lines'])
+            df = pd.concat([df, df_dur, df_time, df_lines], axis=1)
+            dfglob = pd.concat([dfglob,df])
 
     output = "Exps_" + indicator + "_Indicator_" + site_name + "_Chronicle"+ str(chronicle) + "_Approx" + str(approx)
 
@@ -122,11 +124,11 @@ if __name__ == '__main__':
     
     site = args.site
     chronicle = args.chronicle
-    outliers = True
+    #outliers = True
     indicator = args.indicator
     folder= args.folder
     approx = args.approximation
     chronicle = args.chronicle
 
     
-    createGlobalCSVFile(indicator, folder, site, chronicle, approx)
+    createCSVFileForASiteAndAContext(indicator, folder, site, chronicle, approx)
